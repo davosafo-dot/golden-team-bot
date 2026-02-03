@@ -1,1 +1,67 @@
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+import os
 
+TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
+
+CATALOG = {
+    "Каталог": [
+        ("Товар 1", "1000₽"),
+        ("Товар 2", "1500₽"),
+    ]
+}
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton(cat, callback_data=f"cat:{cat}")]
+        for cat in CATALOG
+    ]
+    await update.message.reply_text(
+        "Добро пожаловать в каталог Golden Team 🛍\nВыберите категорию:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data.startswith("cat:"):
+        cat = data.split(":")[1]
+        keyboard = []
+        for name, price in CATALOG[cat]:
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{name} — {price}",
+                    callback_data=f"order:{name}:{price}"
+                )
+            ])
+        await query.edit_message_text(
+            f"📦 {cat}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    elif data.startswith("order:"):
+        _, name, price = data.split(":")
+        user = query.from_user
+
+        text = (
+            "🛒 НОВЫЙ ЗАКАЗ\n\n"
+            f"👤 {user.full_name}\n"
+            f"📦 {name}\n"
+            f"💰 {price}\n"
+            f"🆔 {user.id}"
+        )
+
+        await context.bot.send_message(chat_id=ADMIN_ID, text=text)
+        await query.edit_message_text("✅ Заказ принят! Мы свяжемся с вами.")
+
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(buttons))
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
